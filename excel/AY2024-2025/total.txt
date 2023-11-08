@@ -1,0 +1,3 @@
+EE1005 Computational Thinking to Programming: 50
+EE2007 Engineering Mathematics II: 60
+EE3012 Communication Principles: 62

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no"
+    />
+    <title>Dashboard</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-F3w7mX95PdgyTmZZMECAngseQB83DfGTowi0iMjiWaeVhAn4FJkqJByhZMI3AhiU"
+      crossorigin="anonymous"
+    />
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow-y: hidden;
+      }
+
+      /* Add custom CSS to split the right pane 50-50 */
+      .split-right {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .comments {
+        overflow-y: scroll;
+        max-height: 30vh;
+      }
+
+      ul {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+        background-color: #333;
+        overflow: hidden;
+      }
+
+      li {
+        float: left;
+      }
+
+      .nav-link {
+        display: block;
+        color: white;
+        text-align: center;
+        padding: 14px 16px;
+        text-decoration: none;
+      }
+
+      li a:hover {
+        background-color: #ddd;
+        color: black;
+      }
+
+      #gauge {
+        height: 100%;
+      }
+
+      .form-label{
+        font-size: 0.8rem !important;
+        font-weight: 600 !important;
+      }
+
+      .form-select{
+        font-size: 0.8rem !important;
+        font-weight: 400 !important;
+      }
+
+      .custom-height-1{
+        height: 12rem !important;
+      }
+
+      .custom-height-2{
+        height: 12rem !important;
+      }
+
+      .apexcharts-legend{
+        font-size: 0.8rem !important;
+      }
+
+      #pieChart{
+        width: 15rem !important;
+        height: 15rem !important;
+      }
+    </style>
+  </head>
+  <body class="bg-light">
+    <div class="container-fluid">
+      
+      <div class="row" >
+        <!-- Navigation pane (1 column) -->
+        <nav class="col-md-2 bg-light" style="border-right: 1px solid;">
+          <img style="width: 150px" src="../static/logo.webp" />
+      
+          <ul class="nav flex-column">
+            <li class="nav-item">
+              <a
+                class="nav-link active"
+                href="javascript:void(0);"
+                onclick="showPage('overview')"
+                >Overview</a
+              >
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link"
+                href="javascript:void(0);"
+                onclick="showPage('rawdata')"
+                >Raw Data</a
+              >
+            </li>
+          </ul>
+          <div style="margin-top: 5rem; text-align: center">
+            <h4>Survey response rate</h4>
+            <h2>{{ response_rate }}%</h2>
+          </div>
+        </nav>
+
+        <!-- Middle content (3 columns) -->
+        <div class="col-md-8 " style="border-right: 1px solid;">
+          <!-- Overview Page -->
+             <div class="d-flex align-center justify-content-center mt-2 pb-3 mb-2" style="border-bottom: 1px solid; margin-left: -12px; margin-right: -12px; padding: 0 12px;">
+
+          <form
+            action="/dashboard"
+            method="post"
+            class="d-flex align-items-end"
+          >
+            <div class="me-1">
+              <label for="file" class="form-label">Select Excel File:</label>
+              <select name="file" id="file" class="form-select">
+                {% for file in excel_files %}
+                <option value="{{ file }}" {% if file == selected_file %}selected{% endif %}>{{ file }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="me-3">
+            <label for="cohort" class="form-label">Filter by Cohort:</label>
+            <select name="cohort" id="cohort" class="form-select">
+                <option value="All" {% if selected_cohort == "All" %} selected {% endif %}>All</option>
+                <option value="EEE Full-Time" {% if selected_cohort == "EEE Full-Time" %} selected {% endif %}>EEE Full-Time</option>
+                <option value="EEE Part-Time" {% if selected_cohort == "EEE Part-Time" %} selected {% endif %}>EEE Part-Time</option>
+                <option value="IEM Full-Time" {% if selected_cohort == "IEM Full-Time" %} selected {% endif %}>IEM Full-Time</option>
+            </select>
+            </div>
+            <div class="me-3">
+                <label for="ay" class="form-label">Filter by AY:</label>
+                <select name="ay" id="ay" class="form-select">
+                    {% for academic_year in academic_years %}
+                    <option value="{{ academic_year }}" {% if selected_academic_year == academic_year %} selected {% endif %}>{{ academic_year }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+              <input type="submit" value="Submit" class="btn btn-success" />
+            </div>
+          </form>
+        </div>
+
+          <div id="overview" class="page">
+
+            <div class="row mb-3" style="border-bottom: 1px solid;">
+
+              <!-- First Column (4 columns wide on large screens) -->
+              <div class="col-lg-4 custom-height-1" style="border-right: 1px solid;">
+
+                <h6 class="mb-3">Response Rate</h6>
+                <div id="gauge"></div>
+              </div>
+
+              <!-- Second Column (4 columns wide on large screens) -->
+              <div class="col-lg-8 custom-height-2">
+                <h6 class="mb-3">Survey Comments Word Cloud</h6>
+                {% if wordcloud_image_url %}
+                <img
+                  src="{{ url_for('static', filename=wordcloud_image_url) }}"
+                  alt="Word Cloud"
+                  id="wordcloud"
+                  style="max-width: 75%; max-height: 75%; width: auto; height: auto; display: block; margin: 0 auto;"
+                />
+                {% else %}
+                <p>No word cloud available.</p>
+                {% endif %}
+              </div>
+
+            </div>
+            <div class="row">
+              <div class="col-lg-8" style="border-right: 1px solid;">
+                 <h6 class="mb-3">Survey Responses Analysis</h6>
+              <div id="chart"></div>
+              </div>
+              <div class="col-lg-4">
+                <h6 class="mb-3">Survey Responses Distribution</h6>
+                <canvas id="pieChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Raw Data Page -->
+          <div id="rawdata" class="page">
+            <div class="d-flex">
+              <h1 class="col">Raw Data</h1>
+              <div class="col text-end">
+                <form method="post" action="/generate_report" class="me-3 col">
+                  <input
+                    type="hidden"
+                    name="selected_file"
+                    value="{{ selected_file }}"
+                  />
+                  <button type="submit" class="btn btn-primary text-right">
+                    Generate Report
+                  </button>
+                </form>
+              </div>
+            </div>
+            <div class="my-5" >
+              <h2 class="mb-3">Extracted Table</h2>
+              <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                  <thead>
+                    <tr>
+                      {% for column in extracted_column_headers %}
+                      <th>{{ column }}</th>
+                      {% endfor %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in extracted_data %}
+                    <tr>
+                      {% for column in extracted_column_headers %}
+                      <td>{{ row[column] }}</td>
+                      {% endfor %}
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="my-5">
+              <h2 class="mb-3">Reformatted Table</h2>
+              <div class="table-responsive" style="width: 90%;">
+                <table class="table table-bordered table-hover">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <!-- New column for numbers -->
+                      {% for column in column_names %}
+                      <th>{{ column }}</th>
+                      {% endfor %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in data %}
+                    <tr>
+                      <td>{{ loop.index }}</td>
+                      <!-- Number column -->
+                      {% for column in column_names %}
+                      <td>{{ row[column] }}</td>
+                      {% endfor %}
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right column (1-2 columns) -->
+        <div class="col-md-2 split-right">
+          <!-- Top section (list of comments, scrollable) -->
+          <div class="mb-1">
+            <h5 class="mb-4">Comments</h5>
+            <div class="my-4 comments">
+              {% for comment in comments %}
+              <div class="comment mb-2 border p-3 rounded">
+                <strong>{{ comment.name }}</strong> ({{ comment.email }})
+                <p>{{ comment.comment_text }}</p>
+                <p>{{ comment.timestamp }}</p>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Bottom section (comment input form) -->
+          <div class="my-0" style="border-top: 1px solid; margin-left: -12px; margin-right: -12px; padding: 0 12px;">
+            <h5 class="mb-2">Leave a Comment</h5>
+            <form action="/comment" method="post">
+              <input type="hidden" name="file" value="{{ selected_file }}" />
+              <div class="mb-2">
+                <label for="name" class="form-label">Name:</label>
+                <input type="text" name="name" required class="form-control" />
+              </div>
+              <div class="mb-2">
+                <label for="email" class="form-label">Email:</label>
+                <input type="text" name="email" required class="form-control" />
+              </div>
+              <div class="mb-2">
+                <label for="comment" class="form-label">Comment:</label>
+                <textarea
+                  name="comment"
+                  required
+                  class="form-control"
+                  rows="4"
+                ></textarea>
+              </div>
+              <div>
+                <input
+                  type="submit"
+                  value="Submit Comment"
+                  class="btn btn-primary"
+                />
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap JS (optional) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      // Extract the data for the chart
+      var chartData = [
+          {% for row in data %}
+          {
+              "Statement/Question": {{ loop.index }},
+              "Strongly Agree": {{ row['Strongly Agree'] }},
+              "Agree": {{ row['Agree'] }},
+              "Neutral": {{ row['Neutral'] }},
+              "Disagree": {{ row['Disagree'] }},
+              "Strongly Disagree": {{ row['Strongly Disagree'] }}
+          },
+          {% endfor %}
+      ];
+
+      // Create an array of response categories
+      var responseCategories = ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"];
+
+      // Create the series data for the chart
+      var seriesData = responseCategories.map(function(category) {
+          return {
+              name: category,
+              data: chartData.map(function(row) {
+                  return row[category];
+              })
+          };
+      });
+
+      // Configure the chart options
+      var options = {
+          series: seriesData,
+          chart: {
+              type: "bar",
+              height: 400,
+              stacked: false
+          },
+          plotOptions: {
+              bar: {
+                  horizontal: false,
+                  columnWidth: "50%", // Set the column width for the bars
+              }
+              
+          },
+          xaxis: {
+              categories: chartData.map(function(row) { return row["Statement/Question"]; }),
+              labels: {
+                  formatter: function(value) {
+                      return "Question " + value;
+                  }
+              }
+          },
+          yaxis: {
+              labels: {
+                  formatter: function(value) {
+                      return value + "%";
+                  }
+              }
+          },
+          legend: {
+              position: "top",
+              horizontalAlign: "left",
+              offsetX: 40
+          },
+          dataLabels: {
+            enabled: false // Set this to false to remove the labels in the middle of the chart
+          },
+          colors: ["#008FFB", "#00E396", "#FEB019", "#FF4560", "#775DD0"] // Set custom colors for each category
+      };
+      var chartDataCount = [
+          {% for row in data %}
+          {
+              "Statement/Question": {{ loop.index }},
+              "Strongly Agree": {{ row['Strongly Agree Count'] }},
+              "Agree": {{ row['Agree Count'] }},
+              "Neutral": {{ row['Neutral Count'] }},
+              "Disagree": {{ row['Disagree Count'] }},
+              "Strongly Disagree": {{ row['Strongly Disagree Count'] }}
+          },
+          {% endfor %}
+      ];
+      // Function to calculate the sums for each category
+      function calculateCategorySums(data) {
+          var categorySums = {
+              "Strongly Agree": 0,
+              "Agree": 0,
+              "Neutral": 0,
+              "Disagree": 0,
+              "Strongly Disagree": 0
+          };
+
+          for (var i = 0; i < data.length; i++) {
+              for (var category in categorySums) {
+                  categorySums[category] += data[i][category];
+              }
+          }
+
+          return categorySums;
+      }
+
+      // Calculate category sums
+      var categorySums = calculateCategorySums(chartDataCount);
+
+      // Get the canvas element
+      var ctx = document.getElementById('pieChart').getContext('2d');
+
+      var myPieChart = new Chart(ctx, {
+          type: 'pie',
+          data: {
+              labels: Object.keys(categorySums),
+              datasets: [{
+                  data: Object.values(categorySums),
+                  backgroundColor: ["#008FFB", "#00E396", "#FEB019", "#FF4560", "#775DD0"]
+              }]
+          },
+      });
+
+      // Create the chart
+      var chart = new ApexCharts(document.querySelector("#chart"), options);
+      chart.render();
+
+      // Calculate the total percentage of Strongly Agree and Agree categories
+      var totalAgree = chartData.reduce(function(sum, row) {
+          return sum + row['Strongly Agree'] + row['Agree'];
+      }, 0);
+      var total = chartData.reduce(function(sum, row) {
+          return sum + row['Strongly Agree'] + row['Agree'] + row['Neutral'] + row['Disagree'] + row['Strongly Disagree'];
+      }, 0);
+      var totalPercentage = totalAgree / total * 100;
+      var gaugeNumberColor = 0;
+      if (totalPercentage <= 50) {
+          gaugeNumberColor = "red";
+      } else if (totalPercentage <= 75) {
+          gaugeNumberColor = "#ffbf00";
+      } else {
+          gaugeNumberColor = "green";
+      }
+
+      // Create the gauge plot
+      var gaugeData = [
+          {
+              type: "indicator",
+              mode: "gauge+number",
+              value: totalPercentage,
+              number: { font: {color: gaugeNumberColor} },
+              title: {
+                text: "Total Percentage",
+                font: { size: 14, weight: "bold" } // Adjust the size property
+              },
+              gauge: {
+                  axis: { range: [0, 100] },
+                  bar: { color: "rgba(8, 29, 88, 0.8)" },
+                  bgcolor: "#f8f9fa",
+                  borderwidth: 2,
+                  bordercolor: "gray",
+                  steps: [
+                      { range: [0, 50], color: "red" },
+                      { range: [50, 75], color: "#ffbf00" },
+                      { range: [75, 100], color: "green" }
+                  ],
+                  threshold: {
+                      line: { color: "red", width: 4 },
+                      thickness: 0.75,
+                      value: totalPercentage
+                  }
+              }
+          }
+      ];
+
+      var gaugeLayout = {
+          autosize:true,
+          margin: { t: 30, r:30, l: 30, b: 10 },
+          paper_bgcolor: '#f8f9fa',
+          // Set the width and height to make the gauge smaller
+          width: 180, // Adjust this to your desired width
+          height: 150, // Adjust this to your desired height
+      };
+
+      Plotly.newPlot("gauge", gaugeData, gaugeLayout);
+    </script>
+    <script>
+      // JavaScript function to show/hide pages based on navigation
+      function showPage(pageId) {
+        // Hide all pages
+        var pages = document.querySelectorAll(".page");
+        pages.forEach(function (page) {
+          page.style.display = "none";
+        });
+
+        // Show the selected page
+        document.getElementById(pageId).style.display = "block";
+        if (pageId == "rawdata"){
+          document.querySelector('html').style.overflowY = 'visible';
+          document.querySelector('body').style.overflowY = 'visible';
+        }
+        else{
+        document.querySelector('html').style.overflowY = "hidden";
+        document.querySelector('body').style.overflowY = "hidden";
+      }
+      }
+
+
+      // Show the "Overview" page by default
+      showPage("overview");
+    </script>
+  </body>
+</html>
